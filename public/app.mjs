@@ -139,7 +139,7 @@ M.mount('#app', () => ({
             <span class="htitle" x-text="s.title"></span>
             <span class="hmeta"><span x-text="ago(s.updated)"></span> · <span x-text="s.turns"></span> <span x-text="s.turns === 1 ? 'turn' : 'turns'"></span> · <span x-text="s.sources"></span> src</span>
           </button>
-          <button class="del" title="Delete" aria-label="Delete search" @click="remove(s.id, $event)"><i class="ph ph-x"></i></button>
+          <button class="del" title="Delete" aria-label="Delete search" @click="remove(s.id, $event)"><i class="ph ph-trash"></i></button>
         </div>
       </div>
       <div class="navfoot"><span class="pill">SearXNG</span><span class="pill"><i></i>local LLM</span></div>
