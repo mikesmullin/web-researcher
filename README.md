@@ -23,16 +23,22 @@ writes one cited Markdown report. Runs fully local.
 
 ## Search history
 
-Every session is saved as one Markdown file in `./db/` (gitignored) and listed in the sidebar:
-YAML frontmatter holds the metadata (id, title, timestamps, model, counts, questions), the body holds each
-turn (question, research trail, report), and a **Citations** appendix lists every source (read vs. only found).
-Sessions are deep-linkable (`#<id>`), reload-safe, and can be deleted from the sidebar.
+History is stored **in each user's browser** (`localStorage`, one Markdown document per session under the key
+`ds:s:<id>`), never on the server — so it is private per browser/user and the service is stateless
+(follow-ups send the previous turns along with the question). Each document has YAML frontmatter with the
+metadata (id, title, timestamps, model, counts, questions), then each turn (question, research trail, report),
+then a **Citations** appendix listing every source (read vs. only found).
+
+- Sessions are deep-linkable (`#<id>`), survive reloads, and can be deleted from the sidebar (trash icon).
+- `localStorage` is per origin: `localhost:2340`, `host:1234/search/` etc. each have their own history.
+- Clearing site data removes it; the **Copy** button exports a whole thread as Markdown.
+- If browser storage is full or blocked, the UI says so and the session just won't appear in history.
 
 ## Parts
 
 - `agent.mjs` — [agl-ai](https://github.com/mikesmullin/agl) agent (`llama-server:default` on :1234) + `web_search` / `fetch_page` tools
-- `server.mjs` — Bun server; streams progress over SSE (`/api/research?q=&session=`) + sessions API
-- `store.mjs` — session persistence (Markdown + YAML frontmatter in `db/`)
+- `server.mjs` — stateless Bun server; `POST /api/research` streams progress over SSE
+- `public/store.mjs` — session persistence in the browser (Markdown + YAML frontmatter in `localStorage`)
 - `public/` — dark, responsive, [Phosphor](https://phosphoricons.com)-iconed [m-js](https://github.com/mikesmullin/m-js) UI (`app.mjs`, `md.mjs`, `style.css`)
 
 ## Run
@@ -45,7 +51,7 @@ Sessions are deep-linkable (`#<id>`), reload-safe, and can be deleted from the s
     bun server.mjs                       # UI on 127.0.0.1:2340
     bun agent.mjs "your question"        # or CLI
 
-Env: `SEARXNG_URL`, `LLM_MODEL` (default `llama-server:default`), `MAX_TOOL_CALLS`, `MAX_TURNS`, `DB_DIR`, `PORT` (2340), `HOST` (127.0.0.1).
+Env: `SEARXNG_URL`, `LLM_MODEL` (default `llama-server:default`), `MAX_TOOL_CALLS`, `MAX_TURNS`, `PORT` (2340), `HOST` (127.0.0.1).
 
 ## LAN access
 

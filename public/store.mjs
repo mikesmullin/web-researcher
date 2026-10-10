@@ -1,38 +1,48 @@
-// Session persistence: one Markdown file per research session in ./db/
-// YAML frontmatter = metadata; body = turns (question, trail, report) + a citation-list appendix.
-import { mkdir, readdir, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-
-const DIR = process.env.DB_DIR || join(import.meta.dir, 'db');
+// Session persistence in the browser: one Markdown document per session in localStorage
+// (key `ds:s:<id>`). YAML frontmatter = metadata; body = turns (question, trail, report)
+// + a citation-list appendix. Nothing about a user's history is stored on the server.
+const PREFIX = 'ds:s:';
 const ID_RE = /^[\w-]+$/;
 const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
-const pathOf = (id) => {
-  if (!ID_RE.test(id)) throw new Error('bad session id');
-  return join(DIR, `${id}.md`);
-};
 
-export function newSession(question, model) {
-  const now = new Date();
-  const stamp = now.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+export function newId(question) {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
   const slug = one(question).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-  return {
-    id: `${stamp}-${slug || 'search'}`, title: one(question).slice(0, 100),
-    created: now.toISOString(), updated: now.toISOString(), model, turns: [], sources: [],
-  };
+  return `${stamp}-${slug || 'search'}`;
+}
+
+// --- minimal YAML for the flat frontmatter (scalars + list of strings) ---
+const scalar = (v) => (typeof v === 'number' ? String(v) : JSON.stringify(String(v)));
+const yamlDump = (meta) => Object.entries(meta).map(([k, v]) => (Array.isArray(v)
+  ? `${k}:${v.length ? '\n' + v.map((x) => `  - ${scalar(x)}`).join('\n') : ' []'}`
+  : `${k}: ${scalar(v)}`)).join('\n');
+const val = (s) => { try { return JSON.parse(s); } catch { return s.trim(); } };
+function yamlLoad(text) {
+  const o = {};
+  let list = null;
+  for (const line of text.split('\n')) {
+    let m;
+    if (list && (m = line.match(/^\s+- (.*)$/))) { o[list].push(val(m[1])); continue; }
+    if ((m = line.match(/^(\w+):\s*(.*)$/))) {
+      list = null;
+      if (m[2] === '' || m[2] === '[]') { o[m[1]] = []; list = m[2] === '' ? m[1] : null; } else o[m[1]] = val(m[2]);
+    }
+  }
+  return o;
 }
 
 export function toMarkdown(s) {
   const meta = {
-    id: s.id, title: s.title, created: s.created, updated: s.updated, model: s.model,
+    id: s.id, title: s.title, created: s.created, updated: s.updated, model: s.model || '',
     turns: s.turns.length, steps: s.turns.reduce((n, t) => n + t.steps.length, 0),
     sources: s.sources.length, sources_read: s.sources.filter((x) => x.read).length,
     questions: s.turns.map((t) => one(t.q)),
   };
   const body = s.turns.map((t, i) => {
-    const trail = t.steps.map((st) => st.name === 'web_search'
+    const trail = t.steps.map((st) => (st.name === 'web_search'
       ? `- 🔎 search: ${one(st.label)} — ${one(st.meta)}`
-      : `- 📄 read: ${one(st.label)} — ${one(st.meta)} <${st.url || ''}>`).join('\n');
+      : `- 📄 read: ${one(st.label)} — ${one(st.meta)} <${st.url || ''}>`)).join('\n');
     return [
       `<!-- turn ${i + 1} | ${t.at} | ${t.elapsed ?? 0}s -->`,
       `## Q: ${one(t.q)}`, '',
@@ -45,13 +55,13 @@ export function toMarkdown(s) {
   const read = s.sources.filter((x) => x.read).map(line).join('\n') || '_none_';
   const found = s.sources.filter((x) => !x.read).map(line).join('\n');
   const cites = `${read}${found ? `\n\n### Also found (not read)\n\n${found}` : ''}`;
-  return `---\n${Bun.YAML.stringify(meta, null, 2)}\n---\n\n${body}\n\n<!-- citations -->\n## Citations\n\n${cites}\n`;
+  return `---\n${yamlDump(meta)}\n---\n\n${body}\n\n<!-- citations -->\n## Citations\n\n${cites}\n`;
 }
 
 export function fromMarkdown(md) {
   const m = md.match(/^---\n([\s\S]*?)\n---\n/);
   if (!m) throw new Error('no frontmatter');
-  const meta = Bun.YAML.parse(m[1]);
+  const meta = yamlLoad(m[1]);
   const turns = [];
   for (const t of md.matchAll(/<!-- turn \d+ \| (.*?) \| (\d+)s -->\n([\s\S]*?)\n<!-- \/turn -->/g)) {
     const [, at, elapsed, block] = t;
@@ -71,30 +81,35 @@ export function fromMarkdown(md) {
   return { id: meta.id, title: meta.title, created: meta.created, updated: meta.updated, model: meta.model, turns, sources };
 }
 
-export async function saveSession(s) {
+// --- localStorage CRUD (every access guarded: storage can be blocked or full) ---
+export function saveSession(s) {
+  if (!ID_RE.test(s.id)) throw new Error('bad session id');
   s.updated = new Date().toISOString();
-  await mkdir(DIR, { recursive: true });
-  await Bun.write(pathOf(s.id), toMarkdown(s));
-  return s;
+  try { localStorage.setItem(PREFIX + s.id, toMarkdown(s)); return true; }
+  catch (e) { console.warn('could not save session (storage full or blocked):', e); return false; }
 }
 
-export async function loadSession(id) {
-  const f = Bun.file(pathOf(id));
-  return (await f.exists()) ? fromMarkdown(await f.text()) : null;
+export function loadSession(id) {
+  try {
+    const md = localStorage.getItem(PREFIX + id);
+    return md ? fromMarkdown(md) : null;
+  } catch { return null; }
 }
 
-export async function deleteSession(id) { await rm(pathOf(id), { force: true }); }
+export function deleteSession(id) { try { localStorage.removeItem(PREFIX + id); } catch { /* ignore */ } }
 
-export async function listSessions() {
-  await mkdir(DIR, { recursive: true });
+export function listSessions() {
   const out = [];
-  for (const f of await readdir(DIR)) {
-    if (!f.endsWith('.md')) continue;
-    try {
-      const head = (await Bun.file(join(DIR, f)).text()).match(/^---\n([\s\S]*?)\n---\n/)?.[1];
-      const m = Bun.YAML.parse(head);
-      out.push({ id: m.id, title: m.title, created: m.created, updated: m.updated, turns: m.turns, sources: m.sources });
-    } catch { /* skip unreadable file */ }
-  }
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith(PREFIX)) continue;
+      try {
+        const head = localStorage.getItem(k).match(/^---\n([\s\S]*?)\n---\n/)?.[1];
+        const m = yamlLoad(head);
+        out.push({ id: m.id, title: m.title, created: m.created, updated: m.updated, turns: m.turns, sources: m.sources });
+      } catch { /* skip unreadable entry */ }
+    }
+  } catch { /* storage blocked */ }
   return out.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
 }

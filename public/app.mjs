@@ -1,5 +1,6 @@
 import M from './vendor/m.js';
 import { renderMarkdown, hostOf } from './md.mjs';
+import { newId, saveSession, loadSession, deleteSession, listSessions } from './store.mjs';
 
 const EXAMPLES = [
   'Compare SearXNG and the Brave Search API for powering AI agents',
@@ -9,6 +10,26 @@ const EXAMPLES = [
 ];
 const HUES = [250, 190, 150, 30, 330, 210, 90, 10];
 const hue = (s) => HUES[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];
+// POST + stream Server-Sent Events (EventSource can't send a body).
+async function postSSE(url, body, signal, onEvent) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal });
+  if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) !== -1) {
+      const block = buf.slice(0, i); buf = buf.slice(i + 2);
+      const ev = block.match(/^event: (.*)$/m)?.[1];
+      const data = block.match(/^data: (.*)$/m)?.[1];
+      if (ev && data) onEvent(ev, JSON.parse(data));
+    }
+  }
+}
 const ago = (iso) => {
   const s = (Date.now() - new Date(iso)) / 1000;
   if (s < 60) return 'just now';
@@ -19,7 +40,7 @@ const ago = (iso) => {
 
 M.mount('#app', () => ({
   q: '', sid: null, sessions: [], turns: [], sources: [], running: false, menu: false,
-  copied: false, showAll: false, examples: EXAMPLES, _es: null, _t: null,
+  copied: false, showAll: false, examples: EXAMPLES, _ac: null, _t: null, _meta: null,
 
   get started() { return this.turns.length > 0; },
   get cur() { return this.turns[this.turns.length - 1]; },
@@ -36,31 +57,42 @@ M.mount('#app', () => ({
   letter(s) { return (hostOf(s.url)[0] || '?').toUpperCase(); },
   host(s) { return hostOf(s.url); },
 
-  async init() {
-    await this.refresh();
+  init() {
+    this.refresh();
     const id = location.hash.slice(1);
     if (id) this.loadSession(id);
   },
-  async refresh() { try { this.sessions = await (await fetch('api/sessions')).json(); } catch {} },
-  async loadSession(id) {
+  refresh() { this.sessions = listSessions(); },
+  loadSession(id) {
     if (this.running) this.stop();
-    const r = await fetch('api/sessions/' + id);
-    if (!r.ok) { location.hash = ''; return; }
-    const s = await r.json();
+    const s = loadSession(id);
+    if (!s) { history.replaceState(null, '', location.pathname); return; }
     this.sid = s.id; this.sources = s.sources; this.q = ''; this.menu = false; this.showAll = false;
+    this._meta = { created: s.created, model: s.model };
     this.turns = s.turns.map((t, i) => ({ ...t, id: i, draft: '', thinking: '', running: false, open: i === s.turns.length - 1 }));
     location.hash = s.id;
     window.scrollTo(0, 0);
   },
-  async remove(id, e) {
+  remove(id, e) {
     e.stopPropagation();
-    await fetch('api/sessions/' + id, { method: 'DELETE' });
+    deleteSession(id);
     if (this.sid === id) this.reset();
+    this.refresh();
+  },
+  // Write the current thread to localStorage (stopped/unfinished turns are not persisted).
+  persist() {
+    const turns = this.turns.filter((t) => t.report || (t.error && t.error !== 'Stopped.')).map((t) => ({
+      q: t.q, at: t.at, elapsed: t.elapsed, report: t.report, error: t.error || undefined,
+      steps: t.steps.map(({ name, label, meta, url }) => ({ name, label, meta, url })),
+    }));
+    if (!turns.length) return;
+    if (!saveSession({ id: this.sid, title: this.turns[0].q.replace(/\s+/g, ' ').trim().slice(0, 100), created: this._meta.created,
+      model: this._meta.model, turns, sources: this.sources })) this.cur.error ||= 'Could not save to browser storage (full or blocked); this session will not be in history.';
     this.refresh();
   },
   reset() {
     if (this.running) this.stop();
-    Object.assign(this, { sid: null, turns: [], sources: [], q: '', menu: false, showAll: false });
+    Object.assign(this, { sid: null, turns: [], sources: [], q: '', menu: false, showAll: false, _meta: null });
     history.replaceState(null, '', location.pathname);
   },
 
@@ -74,42 +106,48 @@ M.mount('#app', () => ({
   run() {
     const q = this.q.trim();
     if (!q || this.running) return;
+    const prior = this.turns.filter((t) => t.report).slice(-3).map((t) => ({ q: t.q, report: t.report }));
+    if (!this.sid) { this.sid = newId(q); this._meta = { created: new Date().toISOString(), model: '' }; location.hash = this.sid; }
     for (const t of this.turns) t.open = false;
-    this.turns.push({ id: this.turns.length, q, steps: [], report: '', draft: '', thinking: '', error: '', elapsed: 0, running: true, open: true });
+    this.turns.push({ id: this.turns.length, q, at: new Date().toISOString(), steps: [], report: '', draft: '', thinking: '', error: '', elapsed: 0, running: true, open: true });
     this.q = ''; this.running = true;
     document.querySelectorAll('.composer textarea').forEach((t) => { t.style.height = ''; });
     const t0 = Date.now();
     this._t = setInterval(() => { this.cur.elapsed = Math.round((Date.now() - t0) / 1000); }, 1000);
-    const es = this._es = new EventSource('api/research?q=' + encodeURIComponent(q) + (this.sid ? '&session=' + this.sid : ''));
-    const on = (name, fn) => es.addEventListener(name, (e) => fn(JSON.parse(e.data)));
-    on('session', (d) => { this.sid = d.id; location.hash = d.id; });
-    on('thinking', (t) => { this.cur.thinking = (this.cur.thinking + t).slice(-400); });
-    on('delta', (t) => { this.cur.draft += t; });
-    on('tool', (d) => {
-      this.cur.draft = ''; this.cur.thinking = '';
-      this.cur.steps.push({ id: d.id, name: d.name, label: d.args.query || d.args.url, url: d.args.url, state: 'run', meta: '' });
+    const ac = this._ac = new AbortController();
+    const on = {
+      ready: (d) => { this._meta.model = d.model; },
+      thinking: (t) => { this.cur.thinking = (this.cur.thinking + t).slice(-400); },
+      delta: (t) => { this.cur.draft += t; },
+      tool: (d) => {
+        this.cur.draft = ''; this.cur.thinking = '';
+        this.cur.steps.push({ id: d.id, name: d.name, label: d.args.query || d.args.url, url: d.args.url, state: 'run', meta: '' });
+      },
+      result: (d) => {
+        const s = this.cur.steps.find((x) => x.id === d.id);
+        if (!s) return;
+        s.state = d.ok ? 'ok' : 'err';
+        if (!d.ok) { s.meta = `error: ${d.error}`; return; }
+        if (d.name === 'web_search') {
+          s.meta = `${d.out.length} results`;
+          for (const r of d.out) if (!this.sources.some((x) => x.url === r.url)) this.sources.push({ url: r.url, title: r.title, read: false });
+        } else {
+          s.meta = `${d.out.text.length.toLocaleString()} chars`;
+          s.label = d.out.title || s.label;
+          const f = this.sources.find((x) => x.url === s.url);
+          if (f) f.read = true; else this.sources.push({ url: s.url, title: d.out.title, read: true });
+        }
+      },
+      report: (md) => { this.cur.report = md; this.finish(); this.persist(); },
+      error: (m) => { this.cur.error = m; this.finish(); this.persist(); },
+    };
+    postSSE('api/research', { q, history: prior }, ac.signal, (ev, d) => on[ev]?.(d)).catch((e) => {
+      if (ac.signal.aborted || !this.running) return;
+      this.cur.error ||= String(e.message || 'Connection lost.'); this.finish(); this.persist();
     });
-    on('result', (d) => {
-      const s = this.cur.steps.find((x) => x.id === d.id);
-      if (!s) return;
-      s.state = d.ok ? 'ok' : 'err';
-      if (!d.ok) { s.meta = d.error; return; }
-      if (d.name === 'web_search') {
-        s.meta = `${d.out.length} results`;
-        for (const r of d.out) if (!this.sources.some((x) => x.url === r.url)) this.sources.push({ url: r.url, title: r.title, read: false });
-      } else {
-        s.meta = `${d.out.text.length.toLocaleString()} chars`;
-        s.label = d.out.title || s.label;
-        const f = this.sources.find((x) => x.url === s.url);
-        if (f) f.read = true; else this.sources.push({ url: s.url, title: d.out.title, read: true });
-      }
-    });
-    on('report', (md) => { this.cur.report = md; this.finish(); this.refresh(); });
-    on('error', (m) => { this.cur.error = m; this.finish(); this.refresh(); });
-    es.onerror = () => { if (this.running) { this.cur.error ||= 'Connection lost.'; this.finish(); } };
   },
   finish() {
-    this.running = false; clearInterval(this._t); this._es?.close();
+    this.running = false; clearInterval(this._t); this._ac?.abort();
     if (this.cur) Object.assign(this.cur, { running: false, draft: '', thinking: '' });
   },
   stop() { this.finish(); if (this.cur && !this.cur.report) this.cur.error = 'Stopped.'; },
