@@ -3,7 +3,8 @@ import Agent from 'agl-ai';
 
 const SEARX = process.env.SEARXNG_URL || 'http://localhost:8080';
 const MODEL = process.env.LLM_MODEL || 'llama-server:default'; // :1234 llama.cpp
-const MAX_TURNS = Number(process.env.MAX_TURNS || 14);
+const MAX_TOOL_CALLS = Number(process.env.MAX_TOOL_CALLS || 12); // after this, tools tell the model to write the report
+const MAX_TURNS = Number(process.env.MAX_TURNS || 24); // hard safety cap (agl aborts past this)
 
 const SYSTEM = `You are a meticulous research agent. Today's date: {{today}}.
 Use web_search to find sources and fetch_page to read the most promising ones. Iterate with refined,
@@ -38,14 +39,16 @@ export async function fetchPage(url, limit = 6000) {
     .on('p,div,li,br,h1,h2,h3,h4,tr', { element(el) { buf += '\n'; } })
     .on('body *', { text(t) { if (!skip) buf += t.text; } });
   await rw.transform(new Response(raw)).text();
-  const decode = (s) => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+  const decode = (s) => s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
   const text = decode(buf).replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim().slice(0, limit);
   return { title: decode(title).trim() || url, text };
 }
 
 /** Run the agent. emit(kind, data) streams progress; returns the final Markdown. */
-export async function research(question, emit = () => {}, { signal } = {}) {
+export async function research(question, emit = () => {}, { signal, history = [] } = {}) {
   const agent = await Agent.factory({
     model: MODEL,
     system_prompt: SYSTEM,
@@ -57,7 +60,9 @@ export async function research(question, emit = () => {}, { signal } = {}) {
   });
   signal?.addEventListener('abort', () => agent.abort('client disconnected'));
 
+  let calls = 0;
   const step = (name, args, fn) => async (ctx, a) => {
+    if (++calls > MAX_TOOL_CALLS) return 'Research budget exhausted. Do not call any more tools; write the final cited report now from what you have.';
     const id = crypto.randomUUID().slice(0, 8);
     emit('tool', { id, name, args: a });
     try {
@@ -79,7 +84,13 @@ export async function research(question, emit = () => {}, { signal } = {}) {
     url: { type: 'string' },
   }, ['url'], step('fetch_page', null, (a) => fetchPage(a.url)));
 
-  const res = await agent.run({ prompt: question });
+  // Follow-ups: replay the most recent turns as context (reports capped) ahead of the new question.
+  const context = history.slice(-3).map((h, i) =>
+    `### Earlier question ${i + 1}: ${h.q}\n${(h.report || '').slice(0, 6000)}`).join('\n\n');
+  const prompt = context
+    ? `This is a follow-up in an ongoing research session.\n\n${context}\n\n---\nFollow-up question: ${question}\n\nUse the earlier findings where relevant, search again for anything missing, and write a self-contained report (own [n] numbering and Sources list).`
+    : question;
+  const res = await agent.run({ prompt });
   return res?.choices?.[0]?.message?.content || '';
 }
 

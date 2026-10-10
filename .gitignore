@@ -4,3 +4,4 @@ server.log
 bun.lock
 core-config/settings.yml
 tmp/
+db/
