@@ -1,5 +1,5 @@
-import M from '/vendor/m.js';
-import { renderMarkdown, hostOf } from '/md.mjs';
+import M from './vendor/m.js';
+import { renderMarkdown, hostOf } from './md.mjs';
 
 const EXAMPLES = [
   'Compare SearXNG and the Brave Search API for powering AI agents',
@@ -41,10 +41,10 @@ M.mount('#app', () => ({
     const id = location.hash.slice(1);
     if (id) this.loadSession(id);
   },
-  async refresh() { try { this.sessions = await (await fetch('/api/sessions')).json(); } catch {} },
+  async refresh() { try { this.sessions = await (await fetch('api/sessions')).json(); } catch {} },
   async loadSession(id) {
     if (this.running) this.stop();
-    const r = await fetch('/api/sessions/' + id);
+    const r = await fetch('api/sessions/' + id);
     if (!r.ok) { location.hash = ''; return; }
     const s = await r.json();
     this.sid = s.id; this.sources = s.sources; this.q = ''; this.menu = false; this.showAll = false;
@@ -54,7 +54,7 @@ M.mount('#app', () => ({
   },
   async remove(id, e) {
     e.stopPropagation();
-    await fetch('/api/sessions/' + id, { method: 'DELETE' });
+    await fetch('api/sessions/' + id, { method: 'DELETE' });
     if (this.sid === id) this.reset();
     this.refresh();
   },
@@ -80,7 +80,7 @@ M.mount('#app', () => ({
     document.querySelectorAll('.composer textarea').forEach((t) => { t.style.height = ''; });
     const t0 = Date.now();
     this._t = setInterval(() => { this.cur.elapsed = Math.round((Date.now() - t0) / 1000); }, 1000);
-    const es = this._es = new EventSource('/api/research?q=' + encodeURIComponent(q) + (this.sid ? '&session=' + this.sid : ''));
+    const es = this._es = new EventSource('api/research?q=' + encodeURIComponent(q) + (this.sid ? '&session=' + this.sid : ''));
     const on = (name, fn) => es.addEventListener(name, (e) => fn(JSON.parse(e.data)));
     on('session', (d) => { this.sid = d.id; location.hash = d.id; });
     on('thinking', (t) => { this.cur.thinking = (this.cur.thinking + t).slice(-400); });

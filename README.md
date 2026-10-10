@@ -42,7 +42,13 @@ Sessions are deep-linkable (`#<id>`), reload-safe, and can be deleted from the s
     podman-compose up -d                 # SearXNG on :8080
     bun install                          # Phosphor icons
     bun link agl-ai m-js                 # local fs libs (bun link in each repo first)
-    bun server.mjs                       # UI on :8000
+    bun server.mjs                       # UI on 127.0.0.1:2340
     bun agent.mjs "your question"        # or CLI
 
-Env: `SEARXNG_URL`, `LLM_MODEL` (default `llama-server:default`), `MAX_TOOL_CALLS`, `MAX_TURNS`, `DB_DIR`, `PORT`.
+Env: `SEARXNG_URL`, `LLM_MODEL` (default `llama-server:default`), `MAX_TOOL_CALLS`, `MAX_TURNS`, `DB_DIR`, `PORT` (2340), `HOST` (127.0.0.1).
+
+## LAN access
+
+The server binds to loopback only. To reach it from your LAN, route a subpath to it from a reverse proxy
+(all asset/API URLs are relative, so it works under any prefix, e.g. `https://host:1234/search/` via
+aigw).

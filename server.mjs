@@ -3,7 +3,8 @@ import { research } from './agent.mjs';
 import { join } from 'node:path';
 import { newSession, saveSession, loadSession, deleteSession, listSessions } from './store.mjs';
 
-const PORT = Number(process.env.PORT || 8000);
+const PORT = Number(process.env.PORT || 2340);
+const HOST = process.env.HOST || '127.0.0.1'; // loopback only; LAN access goes through the aigw /search/ proxy
 const PUBLIC = join(import.meta.dir, 'public');
 const PHOSPHOR = join(import.meta.dir, 'node_modules/@phosphor-icons/web/src/regular');
 const MJS = join(import.meta.dir, 'node_modules/m-js/dist/m.min.js');
@@ -63,6 +64,7 @@ async function runTurn(req, q, sid) {
 
 Bun.serve({
   port: PORT,
+  hostname: HOST,
   idleTimeout: 0,
   async fetch(req) {
     const url = new URL(req.url);
@@ -88,4 +90,4 @@ Bun.serve({
     return (await file.exists()) ? new Response(file) : new Response('not found', { status: 404 });
   },
 });
-console.log(`Deep Search → http://localhost:${PORT}`);
+console.log(`Deep Search → http://${HOST}:${PORT}`);
