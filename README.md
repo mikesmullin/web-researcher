@@ -3,6 +3,22 @@
 Agentic web research prototype: ask a question, an agent searches the web (SearXNG), reads sources and
 writes one cited Markdown report. Runs fully local.
 
+## How it looks
+
+**1. Ask** — type a question or pick an example.
+
+![Ask](docs/1-ask.png)
+
+**2. Research** — watch the agent search and read sources live; sources fill in on the right.
+
+![Researching](docs/2-researching.png)
+
+**3. Report** — one cited Markdown report, with tables and clickable `[n]` citations.
+
+![Report](docs/3-report.png)
+
+## Parts
+
 - `agent.mjs` — [agl-ai](https://github.com/mikesmullin/agl) agent (`llama-server:default` on :1234) + `web_search` / `fetch_page` tools
 - `server.mjs` — Bun server; streams progress over SSE (`/api/research?q=`)
 - `public/` — dark, responsive [m-js](https://github.com/mikesmullin/m-js) UI (`app.mjs`, `md.mjs`, `style.css`)
