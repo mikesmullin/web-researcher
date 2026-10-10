@@ -75,6 +75,7 @@ M.mount('#app', () => ({
     for (const t of this.turns) t.open = false;
     this.turns.push({ id: this.turns.length, q, steps: [], report: '', draft: '', thinking: '', error: '', elapsed: 0, running: true, open: true });
     this.q = ''; this.running = true;
+    document.querySelectorAll('.composer textarea').forEach((t) => { t.style.height = ''; });
     const t0 = Date.now();
     this._t = setInterval(() => { this.cur.elapsed = Math.round((Date.now() - t0) / 1000); }, 1000);
     const es = this._es = new EventSource('/api/research?q=' + encodeURIComponent(q) + (this.sid ? '&session=' + this.sid : ''));

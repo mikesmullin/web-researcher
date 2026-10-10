@@ -198,3 +198,5 @@ a.cite:hover { background: var(--acc); color: #08090d; text-decoration: none; }
 .ico .ph { font-size: 16px; } .st .ph { font-size: 18px; } .del .ph { font-size: 14px; }
 .burger .ph { font-size: 18px; } .chev { margin-left: 6px; font-size: 13px; }
 .errbox .ph { font-size: 18px; margin-right: 4px; }
+.src > span:last-child { min-width: 0; }
+.src .st-title, .src .host { overflow-wrap: anywhere; }
