@@ -142,7 +142,6 @@ M.mount('#app', () => ({
           <button class="del" title="Delete" aria-label="Delete search" @click="remove(s.id, $event)"><i class="ph ph-trash"></i></button>
         </div>
       </div>
-      <div class="navfoot"><span class="pill">SearXNG</span><span class="pill"><i></i>local LLM</span></div>
     </aside>
 
     <div class="main">
