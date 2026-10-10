@@ -27,7 +27,7 @@ M.mount('#app', () => ({
   get readCount() { return this.sources.filter((s) => s.read).length; },
   get sortedSources() { const l = [...this.sources].sort((a, b) => b.read - a.read); return this.showAll ? l : l.slice(0, 8); },
   get hasReport() { return this.turns.some((t) => t.report); },
-  get allReports() { return this.turns.filter((t) => t.report).map((t) => `# ${t.q}\n\n${t.report.trim()}`).join('\n\n---\n\n'); },
+  get allReports() { return this.turns.filter((t) => t.report).map((t) => `> User: ${t.q.replace(/\s*\n\s*/g, ' ')}\n\n${t.report.trim()}`).join('\n\n---\n\n'); },
 
   html(t) { return renderMarkdown(t.report || t.draft); },
   clock(n) { return n >= 60 ? `${Math.floor(n / 60)}m ${n % 60}s` : `${n}s`; },
