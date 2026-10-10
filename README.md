@@ -33,13 +33,14 @@ Sessions are deep-linkable (`#<id>`), reload-safe, and can be deleted from the s
 - `agent.mjs` — [agl-ai](https://github.com/mikesmullin/agl) agent (`llama-server:default` on :1234) + `web_search` / `fetch_page` tools
 - `server.mjs` — Bun server; streams progress over SSE (`/api/research?q=&session=`) + sessions API
 - `store.mjs` — session persistence (Markdown + YAML frontmatter in `db/`)
-- `public/` — dark, responsive [m-js](https://github.com/mikesmullin/m-js) UI (`app.mjs`, `md.mjs`, `style.css`)
+- `public/` — dark, responsive, [Phosphor](https://phosphoricons.com)-iconed [m-js](https://github.com/mikesmullin/m-js) UI (`app.mjs`, `md.mjs`, `style.css`)
 
 ## Run
 
     cp settings.yml.example core-config/settings.yml
     sed -i "s/CHANGE_ME/$(openssl rand -hex 32)/" core-config/settings.yml
     podman-compose up -d                 # SearXNG on :8080
+    bun install                          # Phosphor icons
     bun link agl-ai m-js                 # local fs libs (bun link in each repo first)
     bun server.mjs                       # UI on :8000
     bun agent.mjs "your question"        # or CLI

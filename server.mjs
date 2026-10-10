@@ -5,6 +5,7 @@ import { newSession, saveSession, loadSession, deleteSession, listSessions } fro
 
 const PORT = Number(process.env.PORT || 8000);
 const PUBLIC = join(import.meta.dir, 'public');
+const PHOSPHOR = join(import.meta.dir, 'node_modules/@phosphor-icons/web/src/regular');
 const MJS = join(import.meta.dir, 'node_modules/m-js/dist/m.min.js');
 const MODEL = process.env.LLM_MODEL || 'llama-server:default';
 const json = (d, status = 200) => Response.json(d, { status });
@@ -66,10 +67,11 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
     const p = url.pathname;
+    let m;
     try {
       if (p === '/vendor/m.js') return new Response(Bun.file(MJS));
+      if ((m = p.match(/^\/vendor\/phosphor\/(style\.css|Phosphor\.\w+)$/))) return new Response(Bun.file(join(PHOSPHOR, m[1])));
       if (p === '/api/sessions') return json(await listSessions());
-      let m;
       if ((m = p.match(/^\/api\/sessions\/([\w-]+)$/))) {
         if (req.method === 'DELETE') { await deleteSession(m[1]); return json({ ok: true }); }
         const s = await loadSession(m[1]);

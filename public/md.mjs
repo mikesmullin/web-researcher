@@ -20,7 +20,7 @@ function inline(s, cites) {
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
-    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s<).,;])/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)\u0001]+[^\s<).,;\u0001])/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>')
     .replace(/\[(\d+)\](?!\()/g, (m, n) => cites[n]
       ? `<a class="cite" href="${cites[n]}" target="_blank" rel="noopener" title="${hostOf(cites[n])}">${n}</a>` : m);
   return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${esc(codes[i])}</code>`);
@@ -73,7 +73,8 @@ export function renderMarkdown(md) {
       const buf = [];
       while (i < lines.length && lines[i].trim() && !/^(```|#{1,6}\s|\s*>|\s*([-*]|\d+\.)\s+)/.test(lines[i]) && !isTable(i)) buf.push(lines[i++]);
       if (!buf.length) { buf.push(lines[i++]); }
-      out.push(`<p>${inline(buf.join(' '), cites)}</p>`);
+      const text = buf.reduce((a, l) => a + (a && /^\s*\[\d+\]/.test(l) ? '\u0001' : ' ') + l.trim(), '');
+      out.push(`<p>${inline(text, cites).replace(/\u0001/g, '<br>')}</p>`);
     }
   }
   return out.join('\n');

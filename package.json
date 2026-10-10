@@ -3,5 +3,11 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "scripts": { "start": "bun server.mjs", "cli": "bun agent.mjs" }
+  "scripts": {
+    "start": "bun server.mjs",
+    "cli": "bun agent.mjs"
+  },
+  "dependencies": {
+    "@phosphor-icons/web": "^2.1.2"
+  }
 }

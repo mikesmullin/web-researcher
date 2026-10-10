@@ -25,7 +25,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* top bar */
 .bar { display: flex; align-items: center; gap: 10px; padding: 18px 0; }
 .logo { width: 30px; height: 30px; border-radius: 9px; background: var(--grad); display: grid; place-items: center; box-shadow: 0 6px 24px rgba(124,131,255,.35); }
-.logo svg { width: 18px; height: 18px; }
+.logo { color: #08090d; font-size: 18px; }
 .brand { font-weight: 650; letter-spacing: -.01em; }
 .chips-top { margin-left: auto; display: flex; gap: 8px; font-size: 12.5px; color: var(--mut); }
 .pill { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
@@ -176,9 +176,11 @@ a.cite:hover { background: var(--acc); color: #08090d; text-decoration: none; }
 .hero { padding-top: min(16vh, 140px); }
 
 /* follow-up dock */
-.dock { position: sticky; bottom: 0; z-index: 15; padding: 40px 16px 16px; margin-top: -90px; pointer-events: none;
+.dock { position: sticky; bottom: 0; z-index: 15; padding: 40px 0 16px; margin-top: -90px; pointer-events: none;
   background: linear-gradient(to top, var(--bg) 35%, transparent); }
-.dock .composer { pointer-events: auto; }
+.dockin { max-width: 1120px; margin: 0 auto; padding: 0 20px; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; }
+.dock .composer { pointer-events: auto; max-width: none; margin: 0; }
+@media (max-width: 1180px) { .dockin { grid-template-columns: 1fr; } }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
@@ -188,3 +190,11 @@ a.cite:hover { background: var(--acc); color: #08090d; text-decoration: none; }
   .mbar { display: flex; } .hero { padding-top: 7vh; }
   .del { opacity: 1; }
 }
+
+/* icons */
+.ph { vertical-align: -0.125em; }
+.mini .ph, .newbtn .ph, .go .ph { font-size: 1.1em; }
+.newbtn .ph { color: var(--acc2); font-size: 17px; }
+.ico .ph { font-size: 16px; } .st .ph { font-size: 18px; } .del .ph { font-size: 14px; }
+.burger .ph { font-size: 18px; } .chev { margin-left: 6px; font-size: 13px; }
+.errbox .ph { font-size: 18px; margin-right: 4px; }
