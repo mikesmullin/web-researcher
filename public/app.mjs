@@ -64,6 +64,8 @@ M.mount('#app', () => ({
     history.replaceState(null, '', location.pathname);
   },
 
+  // single input handler: an @input attr would replace x-model's own listener, so sync q here too
+  onInput(e) { this.q = e.target.value; this.fit(e); },
   fit(e) { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px'; },
   onKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.q = e.target.value; this.run(); } },
   submit(e) { this.q = e.target.querySelector('textarea').value; this.run(); },
@@ -156,7 +158,7 @@ M.mount('#app', () => ({
           <h1>Ask once. <span>Research everything.</span></h1>
           <p>An agent searches the web, reads the sources and writes one cited report. Private, local, no API fees.</p>
           <form class="composer" @submit.prevent="submit($event)">
-            <textarea rows="1" x-model="q" @input="fit($event)" @keydown="onKey($event)"
+            <textarea rows="1" x-model="q" @input="onInput($event)" @keydown="onKey($event)"
               placeholder="What do you want to know?" aria-label="Research question" autofocus></textarea>
             <button type="submit" class="go" :disabled="!q.trim()"><span class="lbl">Research</span> <i class="ph ph-arrow-right"></i></button>
           </form>
@@ -231,7 +233,7 @@ M.mount('#app', () => ({
 
       <div class="dock" x-show="started"><div class="dockin">
         <form class="composer" @submit.prevent="submit($event)">
-          <textarea rows="1" x-model="q" @input="fit($event)" @keydown="onKey($event)" :disabled="running"
+          <textarea rows="1" x-model="q" @input="onInput($event)" @keydown="onKey($event)" :disabled="running"
             placeholder="Ask a follow-up…" aria-label="Follow-up question"></textarea>
           <button type="button" class="go stop" x-show="running" @click="stop()"><i class="ph ph-stop"></i> <span class="lbl">Stop</span></button>
           <button type="submit" class="go" x-show="!running" :disabled="!q.trim()"><span class="lbl">Ask</span> <i class="ph ph-arrow-right"></i></button>
