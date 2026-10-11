@@ -1,0 +1,27 @@
+# Web Researcher — Deep Search agent server (Bun).
+#
+# Installation:
+#   bun install
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now web-researcher
+#
+# Logs:
+#   journalctl --user -u web-researcher -f
+
+[Unit]
+Description=web-researcher - Deep Search agent server
+After=searxng.service network-online.target
+Requires=searxng.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+ExecStart=%h/.bun/bin/bun server.mjs
+Restart=on-failure
+RestartSec=3
+Environment=PATH=%h/.bun/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=-@REPO@/.env
+
+[Install]
+WantedBy=default.target

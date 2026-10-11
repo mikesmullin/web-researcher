@@ -1,0 +1,28 @@
+# SearXNG — metasearch engine (podman containers).
+#
+# Prerequisites:
+#   podman images pull docker.io/searxng/searxng:latest
+#   podman images pull docker.io/valkey/valkey:9-alpine
+#   mkdir -p /workspace/tmp/searxng/core-config
+#   cp core-config/settings.yml /workspace/tmp/searxng/core-config/
+#
+# Installation:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now searxng
+#
+# Logs:
+#   journalctl --user -u searxng -f
+
+[Unit]
+Description=SearXNG — metasearch engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'podman start searxng-valkey; podman start searxng-core'
+ExecStop=/bin/bash -c 'podman stop searxng-core; podman stop searxng-valkey'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target

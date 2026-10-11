@@ -69,7 +69,7 @@ M.mount('#app', () => ({
     if (!s) { history.replaceState(null, '', location.pathname); return; }
     this.sid = s.id; this.sources = s.sources; this.q = ''; this.menu = false; this.showAll = false;
     this._meta = { created: s.created, model: s.model };
-    this.turns = s.turns.map((t, i) => ({ ...t, id: i, draft: '', thinking: '', running: false, open: i === s.turns.length - 1 }));
+    this.turns = s.turns.map((t, i) => ({ ...t, id: i, draft: '', thinking: '', running: false, open: false }));
     location.hash = s.id;
     window.scrollTo(0, 0);
   },
@@ -109,7 +109,7 @@ M.mount('#app', () => ({
     const prior = this.turns.filter((t) => t.report).slice(-3).map((t) => ({ q: t.q, report: t.report }));
     if (!this.sid) { this.sid = newId(q); this._meta = { created: new Date().toISOString(), model: '' }; location.hash = this.sid; }
     for (const t of this.turns) t.open = false;
-    this.turns.push({ id: this.turns.length, q, at: new Date().toISOString(), steps: [], report: '', draft: '', thinking: '', error: '', elapsed: 0, running: true, open: true });
+    this.turns.push({ id: this.turns.length, q, at: new Date().toISOString(), steps: [], report: '', draft: '', thinking: '', error: '', elapsed: 0, running: true, open: false });
     this.q = ''; this.running = true;
     document.querySelectorAll('.composer textarea').forEach((t) => { t.style.height = ''; });
     const t0 = Date.now();
