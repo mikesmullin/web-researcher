@@ -3,10 +3,10 @@ import { renderMarkdown, hostOf } from './md.mjs';
 import { newId, saveSession, loadSession, deleteSession, listSessions } from './store.mjs';
 
 const EXAMPLES = [
-  'Compare SearXNG and the Brave Search API for powering AI agents',
+  'Compare the Brave Search API and Serper for powering AI agents',
   'What changed in the latest Bun release?',
   'State of local LLM inference on Linux: llama.cpp vs vLLM vs Ollama',
-  'Best practices for self-hosting a metasearch engine',
+  'Best practices for rate-limiting an agentic search loop',
 ];
 const HUES = [250, 190, 150, 30, 330, 210, 90, 10];
 const hue = (s) => HUES[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];

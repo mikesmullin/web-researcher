@@ -1,7 +1,7 @@
 # Deep Search
 
-Agentic web research prototype: ask a question, an agent searches the web (SearXNG), reads sources and
-writes one cited Markdown report. Runs fully local.
+Agentic web research prototype: ask a question, an agent searches the web (Brave Search API), reads sources and
+writes one cited Markdown report. The LLM runs on your machine; search calls go to Brave's API.
 
 ## How it looks
 
@@ -37,6 +37,8 @@ then a **Citations** appendix listing every source (read vs. only found).
 ## Parts
 
 - `agent.mjs` — [agl-ai](https://github.com/mikesmullin/agl) agent (`llama-server:default` on :1234) + `web_search` / `fetch_page` tools
+- `brave.mjs` — Brave Search API client (this project's sole search source): web + news endpoints, freshness,
+  result normalization, error → "stop searching" signal, and a small query cache so repeated lookups don't burn quota
 - `server.mjs` — stateless Bun server; `POST /api/research` streams progress over SSE
 - `mcp.mjs` — MCP stdio server exposing the researcher as a `search` tool (query → cited Markdown report)
 - `public/store.mjs` — session persistence in the browser (Markdown + YAML frontmatter in `localStorage`)
@@ -44,15 +46,24 @@ then a **Citations** appendix listing every source (read vs. only found).
 
 ## Run
 
-    cp settings.yml.example core-config/settings.yml
-    sed -i "s/CHANGE_ME/$(openssl rand -hex 32)/" core-config/settings.yml
-    podman-compose up -d                 # SearXNG on :8080
-    bun install                          # Phosphor icons
-    bun link agl-ai m-js                 # local fs libs (bun link in each repo first)
-    bun server.mjs                       # UI on 127.0.0.1:2340
-    bun agent.mjs "your question"        # or CLI
+    cp .env.example .env                   # put your Brave Search API key in .env
+    bun install                            # Phosphor icons
+    bun link agl-ai m-js                   # local fs libs (bun link in each repo first)
+    bun server.mjs                         # UI on 127.0.0.1:2340
+    bun agent.mjs "your question"          # or CLI
 
-Env: `SEARXNG_URL`, `LLM_MODEL` (default `llama-server:default`), `MAX_TOOL_CALLS`, `MAX_TURNS`, `PORT` (2340), `HOST` (127.0.0.1).
+Env (from the environment or `.env`, which Bun loads automatically): `BRAVE_API_KEY` (required),
+`LLM_MODEL` (default `llama-server:default`), `MAX_TOOL_CALLS`, `MAX_TURNS`, `PORT` (2340), `HOST` (127.0.0.1),
+and the search knobs `BRAVE_COUNT` (20), `BRAVE_SAFESEARCH` (`moderate`), `BRAVE_COUNTRY`, `BRAVE_CACHE_TTL` (600s),
+`BRAVE_BASE_URL`.
+
+## Search backend
+
+Search is the **Brave Search API** (`/res/v1/web/search`, plus `/res/v1/news/search` for `categories: news`);
+there is no local metasearch container any more. Get a key at <https://api-dashboard.search.brave.com> and keep it
+in `.env` (gitignored). Every request costs quota, so identical queries are cached for `BRAVE_CACHE_TTL` seconds.
+If Brave answers 401/402/429/5xx the agent stops and reports the backend as unavailable instead of writing a
+report from thin air. Add more sources by extending `brave.mjs` / the `web_search` tool.
 
 ## MCP tool (for agents)
 
@@ -66,7 +77,7 @@ Env: `SEARXNG_URL`, `LLM_MODEL` (default `llama-server:default`), `MAX_TOOL_CALL
 ```
 
 Run it directly with `bun mcp.mjs`. Progress and errors go to stderr; stdout carries only
-JSON-RPC. Same research env vars apply (`SEARXNG_URL`, `LLM_MODEL`, `MAX_TOOL_CALLS`, `MAX_TURNS`).
+JSON-RPC. Same research env vars apply (`BRAVE_API_KEY`, `LLM_MODEL`, `MAX_TOOL_CALLS`, `MAX_TURNS`).
 
 ## LAN access
 

@@ -1,13 +1,14 @@
 ---
 name: web-researcher
-description: Agentic web research. Searches the web (SearXNG), reads sources, returns one cited Markdown report. Use when you need up-to-date or external information.
+description: Agentic web research. Searches the web (Brave Search API), reads sources, returns one cited Markdown report. Use when you need up-to-date or external information.
 ---
 
 # web-researcher — Usage Guide for AI Agents
 
-`web-researcher` (Deep Search) is a local agentic research tool: it searches the web via
-SearXNG, reads the most promising sources, and writes one cited Markdown report.
-Runs fully local, no API fees.
+`web-researcher` (Deep Search) is a local agentic research tool: it searches the web with the
+**Brave Search API**, reads the most promising sources, and writes one cited Markdown report.
+The agent runs on your machine; search is a paid/quota-limited API call, so queries are cached
+and a run makes only a handful of them.
 
 ## How to call it
 
@@ -45,9 +46,10 @@ One well-scoped question per call; split broad topics into multiple calls and sy
   Ask the user to check `/mcp` (reconnect `web-researcher`); do not silently fall back to shell commands.
 - Result is `_No report produced._` → the research backend dropped the run.
   Retry the call once. If it persists, the backend is likely down
-  (SearXNG on `:8080`, LLM on `:1234`) — report that instead of guessing an answer.
-- Result says the SearXNG backend is degraded/rate-limited → relay that to the user as-is.
-  Do not retry in a loop; the user will know what to do (wait, check SearXNG, retry later).
+  (Brave API key/quota, LLM on `:1234`) — report that instead of guessing an answer.
+- Result says the search backend (Brave Search API) is rate-limited or out of quota → relay that
+  to the user as-is. Do not retry in a loop; the user will know what to do (wait, check the key
+  and quota at api-dashboard.search.brave.com, retry later).
 - Result has `isError: true` → surface the error text; do not retry in a loop.
 
 ## When to use

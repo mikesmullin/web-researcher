@@ -1,7 +1,10 @@
 # Web Researcher — Deep Search agent server (Bun).
 #
+# Requires BRAVE_API_KEY in @REPO@/.env (see .env.example); the unit loads it via EnvironmentFile.
+#
 # Installation:
 #   bun install
+#   cp .env.example .env && $EDITOR .env     # put your Brave Search API key in .env
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now web-researcher
 #
@@ -10,8 +13,7 @@
 
 [Unit]
 Description=web-researcher - Deep Search agent server
-After=searxng.service network-online.target
-Requires=searxng.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]

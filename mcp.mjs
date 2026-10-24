@@ -11,8 +11,9 @@
 // MCP client config (e.g. Claude Desktop / mcp.json):
 //   { "mcpServers": { "deep-search": { "command": "bun", "args": ["/path/to/web-researcher/mcp.mjs"] } } }
 //
-// Env (same as agent.mjs/server.mjs): SEARXNG_URL, LLM_MODEL, MAX_TOOL_CALLS, MAX_TURNS.
+// Env (same as agent.mjs/server.mjs): BRAVE_API_KEY, LLM_MODEL, MAX_TOOL_CALLS, MAX_TURNS.
 import { research } from './agent.mjs';
+import { searchSource } from './brave.mjs';
 
 const NAME = 'web-researcher';
 const VERSION = '0.1.0';
@@ -22,7 +23,7 @@ const LATEST = SUPPORTED[0];
 
 const TOOL = {
   name: 'search',
-  description: 'Run agentic web research: searches the web (SearXNG), reads the most promising sources, and returns one cited Markdown report (summary first, then sections with tables where comparing, inline [n] citations plus a "## Sources" list). Use for any question needing up-to-date or external information.',
+  description: 'Run agentic web research: searches the web (Brave Search API), reads the most promising sources, and returns one cited Markdown report (summary first, then sections with tables where comparing, inline [n] citations plus a "## Sources" list). Use for any question needing up-to-date or external information.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -99,7 +100,7 @@ async function handle(msg) {
 }
 
 async function main() {
-  log(`MCP stdio server v${VERSION} (model=${process.env.LLM_MODEL || 'llama-server:default'}, searxng=${process.env.SEARXNG_URL || 'http://localhost:8080'})`);
+  log(`MCP stdio server v${VERSION} (model=${process.env.LLM_MODEL || 'llama-server:default'}, search=${searchSource()}, key=${process.env.BRAVE_API_KEY ? 'set' : 'MISSING'})`);
   const dec = new TextDecoder();
   let buf = '';
   for await (const chunk of Bun.stdin.stream()) {

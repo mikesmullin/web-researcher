@@ -1,7 +1,7 @@
-// Agentic web research: AGL agent + SearXNG search/fetch tools -> cited Markdown report.
+// Agentic web research: AGL agent + Brave Search API / page-fetch tools -> cited Markdown report.
 import Agent from 'agl-ai';
+import { braveSearch } from './brave.mjs';
 
-const SEARX = process.env.SEARXNG_URL || 'http://localhost:8080';
 const MODEL = process.env.LLM_MODEL || 'llama-server:default'; // :1234 llama.cpp
 const MAX_TOOL_CALLS = Number(process.env.MAX_TOOL_CALLS || 12); // after this, tools tell the model to write the report
 const MAX_TURNS = Number(process.env.MAX_TURNS || 24); // hard safety cap (agl aborts past this)
@@ -12,24 +12,18 @@ distinct queries (call several tools in parallel when independent) and cross-che
 When you have enough, STOP calling tools and write the final report in Markdown: a short summary first,
 then organised sections (use tables where comparing), noting disagreements between sources.
 Cite inline as [1], [2]... and end with a "## Sources" section listing "[n] Title — URL" for each source you used.
-If a web_search call reports the SearXNG backend is degraded, obey it: stop searching and return a short message telling the user the search backend is rate-limited, instead of a findings report.`;
+If a web_search call reports the search backend (Brave Search API) is rate-limited or out of quota,
+obey it: stop searching and return a short message telling the user that instead of a findings report.`;
 
 const UA = { 'User-Agent': 'Mozilla/5.0 (deep-search research agent)' };
 
-export async function webSearch(query, categories = 'general') {
-  const qs = new URLSearchParams({ q: query, format: 'json', categories });
-  const res = await fetch(`${SEARX}/search?${qs}`, { signal: AbortSignal.timeout(30_000) });
-  if (!res.ok) throw new Error(`SearXNG ${res.status}`);
-  const { results = [], unresponsive_engines = [] } = await res.json();
-  // Zero results alongside unresponsive engines means the backend is degraded (rate-limited /
-  // blocked engines), NOT that the topic doesn't exist. Pass that through as an error with
-  // instructions, so the model stops and tells the user instead of writing a bogus report.
-  if (!results.length && unresponsive_engines.length) {
-    const why = unresponsive_engines.map(([e, r]) => `${e}: ${r}`).join('; ');
-    throw new Error(`SearXNG backend degraded — ${why}. STOP: do not call more tools and do not write a findings report. Return a short message telling the user the web-search backend is rate-limited and to retry later.`);
-  }
+export async function webSearch(query, categories = 'general', freshness) {
+  const results = await braveSearch({ query, category: categories, freshness });
+  // Brave answered but found nothing: say so explicitly, so the model rephrases instead of
+  // inventing a report or assuming the topic does not exist.
+  if (!results.length) return { note: `Brave Search returned nothing for "${query}". Rephrase the question (plain English, fewer/narrower terms) or try a different angle.` };
   return results.slice(0, 8).map((r) => ({
-    title: r.title, url: r.url, snippet: (r.content || '').slice(0, 300), engine: r.engine,
+    title: r.title, url: r.url, snippet: r.snippet.slice(0, 300), age: r.age, engine: r.engine,
   }));
 }
 
@@ -83,10 +77,11 @@ export async function research(question, emit = () => {}, { signal, history = []
     }
   };
 
-  agent.Tool('web_search', 'Search the web via SearXNG. Returns titles, URLs and snippets.', {
+  agent.Tool('web_search', 'Search the web with the Brave Search API (this project\'s only search source). Returns titles, URLs, snippets and page age.', {
     query: { type: 'string' },
-    categories: { type: 'string', description: 'general, news, it, science (default general)' },
-  }, ['query'], step('web_search', null, (a) => webSearch(a.query, a.categories || 'general')));
+    categories: { type: 'string', description: 'general (default) or news; anything else uses the web index' },
+    freshness: { type: 'string', description: 'optional: day, week, month or year' },
+  }, ['query'], step('web_search', null, (a) => webSearch(a.query, a.categories || 'general', a.freshness)));
 
   agent.Tool('fetch_page', 'Download a URL and return its readable text (truncated).', {
     url: { type: 'string' },
@@ -103,7 +98,7 @@ export async function research(question, emit = () => {}, { signal, history = []
 }
 
 if (import.meta.main) {
-  const q = process.argv.slice(2).join(' ') || 'What is SearXNG?';
+  const q = process.argv.slice(2).join(' ') || 'What is the Brave Search API?';
   const report = await research(q, (k, d) => {
     if (k === 'tool') console.error(`→ ${d.name}`, JSON.stringify(d.args));
   });
