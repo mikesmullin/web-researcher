@@ -18,7 +18,10 @@ built-in tool. It is declared in your tool list as `mcp__web_researcher__search`
 mcp__web_researcher__search({ query })
 ```
 
-- `query` (string, required) — the research question. `prompt` is accepted as an alias.
+- `query` (string, required) — the research question, phrased as a natural-language English
+  question (e.g. "What are the rate limits of the Brave Search API in 2026?") rather than
+  keyword strings or search operators: the tool is agentic and runs its own refined follow-up
+  searches. `prompt` is accepted as an alias.
   For follow-ups, include the needed context in the question itself; every call returns
   a self-contained report with its own `[n]` numbering and Sources list.
 - Returns a single text block: the final cited Markdown report

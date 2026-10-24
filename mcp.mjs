@@ -26,7 +26,12 @@ const TOOL = {
   inputSchema: {
     type: 'object',
     properties: {
-      query: { type: 'string', description: 'The research question or prompt.' },
+      query: {
+        type: 'string',
+        description:
+          'Research question in plain English, phrased as a natural-language question (e.g. "What are the rate limits of the Brave Search API in 2026?"). '
+          + 'This tool is agentic: it decomposes the request, runs several refined searches itself, and reads sources — so a well-formed question works best, while bare keyword strings, quoted phrases, or search operators (site:, filetype:, "-", OR) constrain it and hurt results.',
+      },
       prompt: { type: 'string', description: 'Alias for `query`.' },
     },
     required: ['query'],
