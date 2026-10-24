@@ -38,6 +38,7 @@ then a **Citations** appendix listing every source (read vs. only found).
 
 - `agent.mjs` — [agl-ai](https://github.com/mikesmullin/agl) agent (`llama-server:default` on :1234) + `web_search` / `fetch_page` tools
 - `server.mjs` — stateless Bun server; `POST /api/research` streams progress over SSE
+- `mcp.mjs` — MCP stdio server exposing the researcher as a `search` tool (query → cited Markdown report)
 - `public/store.mjs` — session persistence in the browser (Markdown + YAML frontmatter in `localStorage`)
 - `public/` — dark, responsive, [Phosphor](https://phosphoricons.com)-iconed [m-js](https://github.com/mikesmullin/m-js) UI (`app.mjs`, `md.mjs`, `style.css`)
 
@@ -52,6 +53,20 @@ then a **Citations** appendix listing every source (read vs. only found).
     bun agent.mjs "your question"        # or CLI
 
 Env: `SEARXNG_URL`, `LLM_MODEL` (default `llama-server:default`), `MAX_TOOL_CALLS`, `MAX_TURNS`, `PORT` (2340), `HOST` (127.0.0.1).
+
+## MCP tool (for agents)
+
+`mcp.mjs` is a zero-dependency MCP stdio server exposing one tool:
+
+- `search({ query })` — runs the agent and returns the final cited report as a single
+  Markdown text block. `prompt` is accepted as an alias for `query`.
+
+```json
+{ "mcpServers": { "web-researcher": { "command": "bun", "args": ["/path/to/web-researcher/mcp.mjs"] } } }
+```
+
+Run it directly with `bun mcp.mjs`. Progress and errors go to stderr; stdout carries only
+JSON-RPC. Same research env vars apply (`SEARXNG_URL`, `LLM_MODEL`, `MAX_TOOL_CALLS`, `MAX_TURNS`).
 
 ## LAN access
 

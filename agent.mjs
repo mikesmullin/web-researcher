@@ -11,7 +11,8 @@ Use web_search to find sources and fetch_page to read the most promising ones. I
 distinct queries (call several tools in parallel when independent) and cross-check claims across sources.
 When you have enough, STOP calling tools and write the final report in Markdown: a short summary first,
 then organised sections (use tables where comparing), noting disagreements between sources.
-Cite inline as [1], [2]... and end with a "## Sources" section listing "[n] Title — URL" for each source you used.`;
+Cite inline as [1], [2]... and end with a "## Sources" section listing "[n] Title — URL" for each source you used.
+If a web_search call reports the SearXNG backend is degraded, obey it: stop searching and return a short message telling the user the search backend is rate-limited, instead of a findings report.`;
 
 const UA = { 'User-Agent': 'Mozilla/5.0 (deep-search research agent)' };
 
@@ -19,7 +20,14 @@ export async function webSearch(query, categories = 'general') {
   const qs = new URLSearchParams({ q: query, format: 'json', categories });
   const res = await fetch(`${SEARX}/search?${qs}`, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) throw new Error(`SearXNG ${res.status}`);
-  const { results = [] } = await res.json();
+  const { results = [], unresponsive_engines = [] } = await res.json();
+  // Zero results alongside unresponsive engines means the backend is degraded (rate-limited /
+  // blocked engines), NOT that the topic doesn't exist. Pass that through as an error with
+  // instructions, so the model stops and tells the user instead of writing a bogus report.
+  if (!results.length && unresponsive_engines.length) {
+    const why = unresponsive_engines.map(([e, r]) => `${e}: ${r}`).join('; ');
+    throw new Error(`SearXNG backend degraded — ${why}. STOP: do not call more tools and do not write a findings report. Return a short message telling the user the web-search backend is rate-limited and to retry later.`);
+  }
   return results.slice(0, 8).map((r) => ({
     title: r.title, url: r.url, snippet: (r.content || '').slice(0, 300), engine: r.engine,
   }));

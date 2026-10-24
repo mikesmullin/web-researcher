@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "start": "bun server.mjs",
-    "cli": "bun agent.mjs"
+    "cli": "bun agent.mjs",
+    "mcp": "bun mcp.mjs"
   },
   "dependencies": {
     "@phosphor-icons/web": "^2.1.2"
