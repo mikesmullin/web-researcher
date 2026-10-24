@@ -1,7 +1,8 @@
 # Deep Search
 
-Agentic web research prototype: ask a question, an agent searches the web (Brave Search API), reads sources and
-writes one cited Markdown report. The LLM runs on your machine; search calls go to Brave's API.
+Agentic web research prototype: ask a question, an agent searches the web (Brave Search API) **and
+X/Twitter (X API v2 recent posts)**, reads sources and writes one cited Markdown report. The LLM runs
+on your machine; search calls go to both APIs.
 
 ## How it looks
 
@@ -36,9 +37,12 @@ then a **Citations** appendix listing every source (read vs. only found).
 
 ## Parts
 
-- `agent.mjs` — [agl-ai](https://github.com/mikesmullin/agl) agent (`llama-server:default` on :1234) + `web_search` / `fetch_page` tools
-- `brave.mjs` — Brave Search API client (this project's sole search source): web + news endpoints, freshness,
-  result normalization, error → "stop searching" signal, and a small query cache so repeated lookups don't burn quota
+- `agent.mjs` — [agl-ai](https://github.com/mikesmullin/agl) agent (`llama-server:default` on :1234) + `web_search` / `x_search` / `fetch_page` tools
+- `brave.mjs` — Brave Search API client: web + news endpoints, freshness, result normalization, error
+  → "degrade to the other source" signal, and a small query cache so repeated lookups don't burn quota
+- `x.mjs` — X (Twitter) API v2 client: app-only Bearer auth, `/2/tweets/search/recent` (last 7 days,
+  `tweet.fields`/`expansions`), result normalization, error → "degrade to the other source" signal, cache
+- `env.mjs` — shared `.env` loader so callers outside this repo (e.g. MCP clients) still find the keys
 - `server.mjs` — stateless Bun server; `POST /api/research` streams progress over SSE
 - `mcp.mjs` — MCP stdio server exposing the researcher as a `search` tool (query → cited Markdown report)
 - `public/store.mjs` — session persistence in the browser (Markdown + YAML frontmatter in `localStorage`)
@@ -46,27 +50,39 @@ then a **Citations** appendix listing every source (read vs. only found).
 
 ## Run
 
-    cp .env.example .env                   # put your Brave Search API key in .env
+    cp .env.example .env                   # Brave Search API key + X API Bearer token in .env
     bun install                            # Phosphor icons
     bun link agl-ai m-js                   # local fs libs (bun link in each repo first)
     bun server.mjs                         # UI on 127.0.0.1:2340
     bun agent.mjs "your question"          # or CLI
 
 Env (from the environment or `.env`, which Bun loads automatically): `BRAVE_API_KEY` (required),
+`X_BEARER_TOKEN` (required for X search; app-only token from console.x.com, stored **decoded**),
 `LLM_MODEL` (default `llama-server:default`), `MAX_TOOL_CALLS`, `MAX_TURNS`, `PORT` (2340), `HOST` (127.0.0.1),
-and the search knobs `BRAVE_COUNT` (20), `BRAVE_SAFESEARCH` (`moderate`), `BRAVE_COUNTRY`, `BRAVE_CACHE_TTL` (600s),
-`BRAVE_BASE_URL`.
+and the search knobs `BRAVE_COUNT` (20), `BRAVE_SAFESEARCH` (`moderate`), `BRAVE_COUNTRY`,
+`BRAVE_CACHE_TTL` (600s), `BRAVE_BASE_URL`, `X_BASE_URL` (https://api.x.com), `X_COUNT` (10),
+`X_CACHE_TTL` (600s).
 
-## Search backend
+## Search backends
 
-Search is the **Brave Search API** (`/res/v1/web/search`, plus `/res/v1/news/search` for `categories: news`);
-there is no local metasearch container any more. Get a key at <https://api-dashboard.search.brave.com> and keep it
-in `.env` (gitignored). `.env` is read from this repo's directory regardless of the caller's working directory,
-so MCP clients that launch `bun /path/to/web-researcher/mcp.mjs` from their own workspace still get the key
-(a real `BRAVE_API_KEY` in the environment always wins). Every request costs quota, so identical queries are
-cached for `BRAVE_CACHE_TTL` seconds.
-If Brave answers 401/402/429/5xx the agent stops and reports the backend as unavailable instead of writing a
-report from thin air. Add more sources by extending `brave.mjs` / the `web_search` tool.
+Search is **two independent sources**:
+
+1. **Brave Search API** (`/res/v1/web/search`, plus `/res/v1/news/search` for `categories: news`).
+   Get a key at <https://api-dashboard.search.brave.com>.
+2. **X (Twitter) API v2** — app-only Bearer auth, `GET /2/tweets/search/recent` (public posts,
+   **last 7 days only**; `max_results` 1–100, `tweet.fields`/`expansions` to include author + metrics).
+   Get the Bearer token at <https://console.x.com> → your app → **Keys & Tokens** → "app-only
+   authentication → Bearer token". Note: the token often shows up URL-encoded in the console; store
+   the decoded value in `X_BEARER_TOKEN`. X apps are created in **Development** mode and can't
+   authenticate until moved to **Production** (and fresh Pay-Per-Use apps can need a few minutes of
+   backend enrollment) — that's a common cause of 401s.
+
+Both keys live in `.env` (gitignored). `.env` is read from this repo's directory regardless of the
+caller's working directory, so MCP clients that launch `bun /path/to/web-researcher/mcp.mjs` from
+their own workspace still get the keys (a real environment variable always wins). Every request costs
+quota, so identical queries are cached. If one backend fails the agent **degrades to the other** and
+only reports "backend unavailable" if both fail. Add more sources by following the same
+`brave.mjs` / `x.mjs` pattern and adding an agent `Tool`.
 
 ## MCP tool (for agents)
 

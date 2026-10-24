@@ -1,19 +1,26 @@
 // Agentic web research: AGL agent + Brave Search API / page-fetch tools -> cited Markdown report.
 import Agent from 'agl-ai';
 import { braveSearch } from './brave.mjs';
+import { xSearch } from './x.mjs';
 
 const MODEL = process.env.LLM_MODEL || 'llama-server:default'; // :1234 llama.cpp
 const MAX_TOOL_CALLS = Number(process.env.MAX_TOOL_CALLS || 12); // after this, tools tell the model to write the report
 const MAX_TURNS = Number(process.env.MAX_TURNS || 24); // hard safety cap (agl aborts past this)
 
 const SYSTEM = `You are a meticulous research agent. Today's date: {{today}}.
-Use web_search to find sources and fetch_page to read the most promising ones. Iterate with refined,
-distinct queries (call several tools in parallel when independent) and cross-check claims across sources.
+You have TWO independent search sources: web_search (Brave Search API — broad web and news, with freshness
+filtering) and x_search (X/Twitter API — recent public posts from the last 7 days, real-time conversation,
+first-person posts and discourse). Use fetch_page to read the most promising URLs.
+A good search combines both: web_search for docs, news, comparisons and established facts; x_search for
+what people are actually saying about the topic right now and current discourse. Iterate with refined,
+distinct queries (call tools in parallel when independent) and cross-check claims across both sources and
+across pages.
+If a tool reports its own source is unavailable (token error, quota, rate limit), do not retry that tool —
+just switch to the other search source and continue. Only if BOTH web_search and x_search are unavailable,
+stop searching and return a short message telling the user instead of a findings report.
 When you have enough, STOP calling tools and write the final report in Markdown: a short summary first,
 then organised sections (use tables where comparing), noting disagreements between sources.
-Cite inline as [1], [2]... and end with a "## Sources" section listing "[n] Title — URL" for each source you used.
-If a web_search call reports the search backend (Brave Search API) is rate-limited or out of quota,
-obey it: stop searching and return a short message telling the user that instead of a findings report.`;
+Cite inline as [1], [2]... and end with a "## Sources" section listing "[n] Title — URL" for each source you used.`;
 
 const UA = { 'User-Agent': 'Mozilla/5.0 (deep-search research agent)' };
 
@@ -77,13 +84,18 @@ export async function research(question, emit = () => {}, { signal, history = []
     }
   };
 
-  agent.Tool('web_search', 'Search the web with the Brave Search API (this project\'s only search source). Returns titles, URLs, snippets and page age.', {
+  agent.Tool('web_search', 'Search the web with the Brave Search API (one of two search sources; the other is x_search for X/Twitter). Returns titles, URLs, snippets and page age.', {
     query: { type: 'string' },
     categories: { type: 'string', description: 'general (default) or news; anything else uses the web index' },
     freshness: { type: 'string', description: 'optional: day, week, month or year' },
   }, ['query'], step('web_search', null, (a) => webSearch(a.query, a.categories || 'general', a.freshness)));
 
-  agent.Tool('fetch_page', 'Download a URL and return its readable text (truncated).', {
+  agent.Tool('x_search', 'Search X (Twitter) with the project\'s X API v2 Bearer token: recent public posts, last 7 days. Returns post text, x.com URL, author, date, and like/reply/repost counts. Use it for real-time discussion, first-person posts and current discourse -- pair it with web_search (Brave) to cross-check. Tips: the query supports X operators (since:, until:, lang:, min_retweets:, etc.); plain English works too. X recent search only covers the last 7 days, so very old/niche topics return empty.', {
+    query: { type: 'string' },
+    count: { type: 'integer', description: 'optional: number of posts to return, 1-100 (default 10)' },
+  }, ['query'], step('x_search', null, (a) => xSearch({ query: a.query, count: a.count })));
+
+  agent.Tool('fetch_page', 'Download a URL (Brave or X results) and return its readable text (truncated).', {
     url: { type: 'string' },
   }, ['url'], step('fetch_page', null, (a) => fetchPage(a.url)));
 

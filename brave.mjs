@@ -1,41 +1,17 @@
-// Brave Search API client — this project's sole search source (replaced the SearXNG container).
+// Brave Search API client. One of two search sources in this project (the other is X/Twitter
+// in x.mjs). (Replaced the old SearXNG container.)
 // Reference: https://api-dashboard.search.brave.com/documentation/references/web-search-api
 //
 // Env:
-//   BRAVE_API_KEY      required; from the environment or .env (see loadRepoEnv below)
+//   BRAVE_API_KEY      required; from the environment or .env (see env.mjs)
 //   BRAVE_BASE_URL     optional; default https://api.search.brave.com
 //   BRAVE_COUNT        results per request, 1-20 (default 20)
 //   BRAVE_COUNTRY      optional 2-letter country code (e.g. US)
 //   BRAVE_SAFESEARCH   off | moderate | strict (default moderate)
 //   BRAVE_CACHE_TTL    seconds to reuse an identical query (default 600; 0 disables)
 
-import { join } from 'node:path';
-
-// Bun auto-loads .env from the *process* cwd, but MCP clients start `bun .../mcp.mjs` from their
-// own workspace, so the key vanished for callers outside this repo. Read the .env sitting next to
-// this file as well; real environment variables (systemd EnvironmentFile, shell exports) still win.
-const ENV_FILES = ['.env.local', '.env'];
-const ENV_PATHS = ENV_FILES.map((n) => join(import.meta.dir, n));
-async function loadRepoEnv() {
-  for (const path of ENV_PATHS) {
-    const file = Bun.file(path);
-    if (!(await file.exists())) continue;
-    for (const raw of (await file.text()).split('\n')) {
-      const line = raw.trim();
-      if (!line || line.startsWith('#')) continue;
-      const eq = line.indexOf('=');
-      if (eq < 0) continue;
-      const key = line.slice(0, eq).trim().replace(/^export\s+/, '');
-      if (!key) continue;
-      let value = line.slice(eq + 1).trim();
-      const quoted = (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"));
-      if (quoted) value = value.slice(1, -1);
-      else value = value.replace(/\s+#.*$/, '').trim(); // strip trailing comment
-      if (process.env[key] === undefined) process.env[key] = value;
-    }
-  }
-}
-await loadRepoEnv();
+import { loadEnv, ENV_PATHS } from './env.mjs';
+await loadEnv();
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
@@ -72,7 +48,9 @@ export function requireKey() {
   return key;
 }
 
-const STOP = 'STOP: do not call more tools and do not write a findings report. Return a short message telling the user the web-search backend is unavailable and to retry later.';
+// Brave is now one of two search sources. If it fails, the agent must not stop searching —
+// it should fall back to x_search and only give up when BOTH sources are unavailable.
+const STOP = 'Web search (Brave) is unavailable for this run: do not call web_search again. Continue the research with x_search (the X API). Only if x_search is ALSO unavailable, stop calling tools and return a short message telling the user the search backend is unavailable, instead of a findings report.';
 
 function describeFailure(status, body) {
   const detail = String(body || '').slice(0, 300);
