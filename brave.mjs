@@ -2,12 +2,40 @@
 // Reference: https://api-dashboard.search.brave.com/documentation/references/web-search-api
 //
 // Env:
-//   BRAVE_API_KEY      required; from the environment or .env (Bun loads .env automatically)
+//   BRAVE_API_KEY      required; from the environment or .env (see loadRepoEnv below)
 //   BRAVE_BASE_URL     optional; default https://api.search.brave.com
 //   BRAVE_COUNT        results per request, 1-20 (default 20)
 //   BRAVE_COUNTRY      optional 2-letter country code (e.g. US)
 //   BRAVE_SAFESEARCH   off | moderate | strict (default moderate)
 //   BRAVE_CACHE_TTL    seconds to reuse an identical query (default 600; 0 disables)
+
+import { join } from 'node:path';
+
+// Bun auto-loads .env from the *process* cwd, but MCP clients start `bun .../mcp.mjs` from their
+// own workspace, so the key vanished for callers outside this repo. Read the .env sitting next to
+// this file as well; real environment variables (systemd EnvironmentFile, shell exports) still win.
+const ENV_FILES = ['.env.local', '.env'];
+const ENV_PATHS = ENV_FILES.map((n) => join(import.meta.dir, n));
+async function loadRepoEnv() {
+  for (const path of ENV_PATHS) {
+    const file = Bun.file(path);
+    if (!(await file.exists())) continue;
+    for (const raw of (await file.text()).split('\n')) {
+      const line = raw.trim();
+      if (!line || line.startsWith('#')) continue;
+      const eq = line.indexOf('=');
+      if (eq < 0) continue;
+      const key = line.slice(0, eq).trim().replace(/^export\s+/, '');
+      if (!key) continue;
+      let value = line.slice(eq + 1).trim();
+      const quoted = (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"));
+      if (quoted) value = value.slice(1, -1);
+      else value = value.replace(/\s+#.*$/, '').trim(); // strip trailing comment
+      if (process.env[key] === undefined) process.env[key] = value;
+    }
+  }
+}
+await loadRepoEnv();
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
@@ -37,7 +65,7 @@ export function requireKey() {
   const key = process.env.BRAVE_API_KEY;
   if (!key) {
     throw new BraveSearchError(
-      'BRAVE_API_KEY is not set. Export it or add it to .env (see .env.example).',
+      `BRAVE_API_KEY is not set. Export it, or add it to ${ENV_PATHS[1]} (see ${ENV_PATHS[1]}.example).`,
       { fatal: true },
     );
   }

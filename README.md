@@ -61,7 +61,10 @@ and the search knobs `BRAVE_COUNT` (20), `BRAVE_SAFESEARCH` (`moderate`), `BRAVE
 
 Search is the **Brave Search API** (`/res/v1/web/search`, plus `/res/v1/news/search` for `categories: news`);
 there is no local metasearch container any more. Get a key at <https://api-dashboard.search.brave.com> and keep it
-in `.env` (gitignored). Every request costs quota, so identical queries are cached for `BRAVE_CACHE_TTL` seconds.
+in `.env` (gitignored). `.env` is read from this repo's directory regardless of the caller's working directory,
+so MCP clients that launch `bun /path/to/web-researcher/mcp.mjs` from their own workspace still get the key
+(a real `BRAVE_API_KEY` in the environment always wins). Every request costs quota, so identical queries are
+cached for `BRAVE_CACHE_TTL` seconds.
 If Brave answers 401/402/429/5xx the agent stops and reports the backend as unavailable instead of writing a
 report from thin air. Add more sources by extending `brave.mjs` / the `web_search` tool.
 
