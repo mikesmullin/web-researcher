@@ -69,8 +69,13 @@ export async function research(question, emit = () => {}, { signal, history = []
     emit('tool', { id, name, args: a });
     try {
       const out = await fn(a);
-      emit('result', { id, name, ok: true, out });
-      return JSON.stringify(out);
+      // Uniform stream contract: web_search `out` is always an array (the UI does
+      // `for…of d.out`). When Brave found nothing, webSearch returns a {note} object
+      // instead; emit [] on the wire and hand the note text to the model so it
+      // rephrases rather than inventing a report.
+      const note = name === 'web_search' && out && typeof out === 'object' && !Array.isArray(out) ? out.note : undefined;
+      emit('result', { id, name, ok: true, out: note ? [] : out });
+      return note ? String(note) : JSON.stringify(out);
     } catch (e) {
       emit('result', { id, name, ok: false, error: String(e.message || e) });
       return `Error: ${e.message || e}`;
