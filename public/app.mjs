@@ -40,7 +40,8 @@ const ago = (iso) => {
 
 M.mount('#app', () => ({
   q: '', sid: null, sessions: [], turns: [], sources: [], running: false, menu: false,
-  copied: false, showAll: false, examples: EXAMPLES, _ac: null, _t: null, _meta: null,
+  copied: false, showAll: false, examples: EXAMPLES, narrow: false, sourcesPinned: null,
+  _ac: null, _t: null, _meta: null, _mm: null, _onNarrow: null,
 
   get started() { return this.turns.length > 0; },
   get cur() { return this.turns[this.turns.length - 1]; },
@@ -58,16 +59,29 @@ M.mount('#app', () => ({
   host(s) { return hostOf(s.url); },
 
   init() {
+    const mm = window.matchMedia('(max-width: 1180px)');
+    this.narrow = mm.matches;
+    this._mm = mm; this._onNarrow = () => { this.narrow = mm.matches; };
+    mm.addEventListener('change', this._onNarrow);
+    window.addEventListener('resize', this._onNarrow);
     this.refresh();
     const id = location.hash.slice(1);
     if (id) this.loadSession(id);
   },
+  destroy() {
+    this._mm?.removeEventListener('change', this._onNarrow);
+    this._mm = null; this._onNarrow = null;
+  },
+  // Sources panel: auto default follows the layout (wide = open, narrow = closed).
+  // An explicit click pins it so the user's choice survives resizes.
+  get sourcesOpen() { return this.sourcesPinned ?? !this.narrow; },
+  toggleSources() { this.sourcesPinned = !this.sourcesOpen; },
   refresh() { this.sessions = listSessions(); },
   loadSession(id) {
     if (this.running) this.stop();
     const s = loadSession(id);
     if (!s) { history.replaceState(null, '', location.pathname); return; }
-    this.sid = s.id; this.sources = s.sources; this.q = ''; this.menu = false; this.showAll = false;
+    this.sid = s.id; this.sources = s.sources; this.q = ''; this.menu = false; this.showAll = false; this.sourcesPinned = null;
     this._meta = { created: s.created, model: s.model };
     this.turns = s.turns.map((t, i) => ({ ...t, id: i, draft: '', thinking: '', running: false, open: false }));
     location.hash = s.id;
@@ -92,7 +106,7 @@ M.mount('#app', () => ({
   },
   reset() {
     if (this.running) this.stop();
-    Object.assign(this, { sid: null, turns: [], sources: [], q: '', menu: false, showAll: false, _meta: null });
+    Object.assign(this, { sid: null, turns: [], sources: [], q: '', menu: false, showAll: false, sourcesPinned: null, _meta: null });
     history.replaceState(null, '', location.pathname);
   },
 
@@ -149,6 +163,15 @@ M.mount('#app', () => ({
   finish() {
     this.running = false; clearInterval(this._t); this._ac?.abort();
     if (this.cur) Object.assign(this.cur, { running: false, draft: '', thinking: '' });
+    if (this.cur?.report) this.scrollToReport();
+  },
+  scrollToReport() {
+    const arts = [...document.querySelectorAll('.thread article.prose')];
+    const card = (arts[arts.length - 1] ?? {}).closest?.('section');
+    if (!card) return;
+    const pad = Math.round((document.querySelector('.mbar') ?? document.body).offsetHeight) + 8;
+    const top = card.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: Math.max(0, top - pad), behavior: 'smooth' });
   },
   stop() { this.finish(); if (this.cur && !this.cur.report) this.cur.error = 'Stopped.'; },
   async copy() {
@@ -241,6 +264,22 @@ M.mount('#app', () => ({
 
               <section class="card errbox fade-in" x-show="t.error"><i class="ph ph-warning"></i> <span x-text="t.error"></span></section>
 
+              <aside class="side-flow" x-if="t.id === turns.length - 1">
+                <section class="card fade-in">
+                  <h3 class="clickable" @click="toggleSources" :aria-expanded="sourcesOpen">Sources <span class="n"><span x-text="readCount"></span> read · <span x-text="sources.length"></span> found</span><i class="ph chev" :class="sourcesOpen ? 'ph-caret-down' : 'ph-caret-right'"></i></h3>
+                  <div x-show="sourcesOpen">
+                    <div class="empty" x-show="!sources.length">Sources appear as they are found.</div>
+                    <a class="src" x-for="s in sortedSources" :key="s.url" :href="s.url" target="_blank" rel="noopener">
+                      <span class="av" :style="avatar(s)" x-text="letter(s)"></span>
+                      <span><span class="st-title" x-text="s.title"></span>
+                        <span class="host"><span x-text="host(s)"></span><span class="badge" x-show="s.read">read</span></span></span>
+                    </a>
+                    <button class="mini more" x-show="sources.length > 8" @click="showAll = !showAll"
+                      x-text="showAll ? 'Show fewer' : 'Show all ' + sources.length"></button>
+                  </div>
+                </section>
+              </aside>
+
               <section class="card fade-in" x-show="t.report || t.draft">
                 <div class="report-head">
                   <h3 x-text="t.report ? 'Report' : 'Drafting…'"></h3>
@@ -248,24 +287,27 @@ M.mount('#app', () => ({
                 <article class="prose" :class="{ cursor: !t.report }" x-html="html(t)"></article>
               </section>
             </div>
-            <div class="actions" x-show="hasReport && !running">
-              <button class="mini copy" @click="copy()"><i class="ph" :class="copied ? 'ph-check' : 'ph-copy'"></i> <span x-text="copied ? 'Copied' : 'Copy'"></span></button>
-            </div>
           </main>
 
           <aside class="side">
             <section class="card fade-in">
-              <h3>Sources <span class="n"><span x-text="readCount"></span> read · <span x-text="sources.length"></span> found</span></h3>
-              <div class="empty" x-show="!sources.length">Sources appear as they are found.</div>
-              <a class="src" x-for="s in sortedSources" :key="s.url" :href="s.url" target="_blank" rel="noopener">
-                <span class="av" :style="avatar(s)" x-text="letter(s)"></span>
-                <span><span class="st-title" x-text="s.title"></span>
-                  <span class="host"><span x-text="host(s)"></span><span class="badge" x-show="s.read">read</span></span></span>
-              </a>
-              <button class="mini more" x-show="sources.length > 8" @click="showAll = !showAll"
-                x-text="showAll ? 'Show fewer' : 'Show all ' + sources.length"></button>
+              <h3 class="clickable" @click="toggleSources" :aria-expanded="sourcesOpen">Sources <span class="n"><span x-text="readCount"></span> read · <span x-text="sources.length"></span> found</span><i class="ph chev" :class="sourcesOpen ? 'ph-caret-down' : 'ph-caret-right'"></i></h3>
+              <div x-show="sourcesOpen">
+                <div class="empty" x-show="!sources.length">Sources appear as they are found.</div>
+                <a class="src" x-for="s in sortedSources" :key="s.url" :href="s.url" target="_blank" rel="noopener">
+                  <span class="av" :style="avatar(s)" x-text="letter(s)"></span>
+                  <span><span class="st-title" x-text="s.title"></span>
+                    <span class="host"><span x-text="host(s)"></span><span class="badge" x-show="s.read">read</span></span></span>
+                </a>
+                <button class="mini more" x-show="sources.length > 8" @click="showAll = !showAll"
+                  x-text="showAll ? 'Show fewer' : 'Show all ' + sources.length"></button>
+              </div>
             </section>
           </aside>
+
+          <div class="actions" x-show="hasReport && !running">
+            <button class="mini copy" @click="copy()"><i class="ph" :class="copied ? 'ph-check' : 'ph-copy'"></i> <span x-text="copied ? 'Copied' : 'Copy'"></span></button>
+          </div>
         </div>
       </div>
 
