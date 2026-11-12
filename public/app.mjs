@@ -84,6 +84,7 @@ M.mount('#app', () => ({
     this.sid = s.id; this.sources = s.sources; this.q = ''; this.menu = false; this.showAll = false; this.sourcesPinned = null;
     this._meta = { created: s.created, model: s.model };
     this.turns = s.turns.map((t, i) => ({ ...t, id: i, draft: '', thinking: '', running: false, open: false }));
+    this.clearHeights();
     location.hash = s.id;
     window.scrollTo(0, 0);
   },
@@ -107,12 +108,23 @@ M.mount('#app', () => ({
   reset() {
     if (this.running) this.stop();
     Object.assign(this, { sid: null, turns: [], sources: [], q: '', menu: false, showAll: false, sourcesPinned: null, _meta: null });
+    this.clearHeights();
     history.replaceState(null, '', location.pathname);
   },
 
   // single input handler: an @input attr would replace x-model's own listener, so sync q here too
   onInput(e) { this.q = e.target.value; this.fit(e); },
-  fit(e) { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px'; },
+  fit(e) {
+    const t = e.target;
+    t.style.height = 'auto';
+    const h = t.scrollHeight;
+    // scrollHeight is 0 when this composer is hidden (x-show display:none).
+    // Writing '0px' would collapse the field to a 1px strip of placeholder
+    // that sticks around in the live DOM (and bfcache) until the next input,
+    // so clear instead and let rows=1 size it when shown again.
+    t.style.height = h > 0 ? Math.min(h, 200) + 'px' : '';
+  },
+  clearHeights() { document.querySelectorAll('.composer textarea').forEach((t) => { t.style.height = ''; }); },
   onKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.q = e.target.value; this.run(); } },
   submit(e) { this.q = e.target.querySelector('textarea').value; this.run(); },
   pick(x) { this.q = x; this.run(); },
@@ -125,7 +137,7 @@ M.mount('#app', () => ({
     for (const t of this.turns) t.open = false;
     this.turns.push({ id: this.turns.length, q, at: new Date().toISOString(), steps: [], report: '', draft: '', thinking: '', error: '', elapsed: 0, running: true, open: false });
     this.q = ''; this.running = true;
-    document.querySelectorAll('.composer textarea').forEach((t) => { t.style.height = ''; });
+    this.clearHeights();
     const t0 = Date.now();
     this._t = setInterval(() => { this.cur.elapsed = Math.round((Date.now() - t0) / 1000); }, 1000);
     const ac = this._ac = new AbortController();

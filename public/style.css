@@ -45,6 +45,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .composer textarea {
   flex: 1; resize: none; border: 0; outline: 0; background: transparent; color: var(--fg);
   font: inherit; padding: 8px 0; max-height: 200px; line-height: 1.5;
+  /* Backstop: min-height wins over height, so even a stale inline height
+     (e.g. 0px measured while hidden, resurrected via bfcache) can never
+     collapse the field below one row. 1lh + 8px top + 8px bottom padding. */
+  box-sizing: border-box; min-height: 40px; min-height: calc(1lh + 16px);
 }
 .composer textarea::placeholder { color: var(--dim); }
 .go {
